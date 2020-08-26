@@ -1,0 +1,184 @@
+---
+title: "Reproducible Research- Project 1"
+author: "Carlos Martinez"
+date: "26/8/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+## 1. Preparation, loading and preprocessing the data
+### a).  Load the data 
+```{r echo=TRUE}
+data<-read.csv("activity.csv")
+head(data)
+# Note: there are NA values in the steps variable
+```
+### b).  Process/transform the data (if necessary) into a format suitable for your analysis
+```{r, echo=TRUE}
+dev_null <- Sys.setlocale("LC_TIME", "english")
+initdata <- read.csv("activity.csv", colClasses=c("numeric", "Date", "numeric"))
+```
+
+
+```{r, echo=TRUE}
+data <- data[!(is.na(data$steps)), ]
+```
+
+```{r, echo=TRUE}
+# We will use the aggregate () function.
+totalstep <- aggregate(steps ~ date, data, sum)
+head(totalstep)
+# Note: there is not NA values in the steps variable
+```
+### 1.1 Make a histogram of the total number of steps taken each day
+```{r, echo=TRUE}
+totalstep <- with(data, aggregate(steps, by = list(date), FUN = sum, na.rm = TRUE))
+head(totalstep)
+names(totalstep) <- c("date", "steps")
+color <- colorRampPalette(c("skyblue", "darkblue", "skyblue"))
+hist(totalstep$steps, xlab=" Steps per day", ylab=" Number of Days ", main=" Histogram of the total number of steps taken each day ", col = color(32), ylim = c(0,20), breaks = seq(0,25000, by=2500))
+```
+
+### 1.2. Calculate and report the mean and median total number of steps taken per day 
+```{r, echo=TRUE}
+library(dplyr)
+statistics <- summarise(totalstep, mean=mean(totalstep $steps),
+                               median=median(totalstep $steps))
+statistics
+# We report the mean and median: Mean is 10766.19 and Median value 10765
+```
+
+
+### 2.1.  Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r, echo=TRUE}
+library(ggplot2)
+prom<- aggregate(x=list(steps=data$steps), by=list(interval=data$interval),
+                      FUN=mean, na.rm=TRUE)
+ggplot(data=prom, aes(x=interval, y=steps)) +
+    geom_path(colour = " darkblue", lwd=0.5)+
+    ggtitle("Time Series: Averaged across all days / 5-minute interval")+
+    xlab("5-minute interval") +
+    ylab("Average number of steps taken")
+```
+
+### 2.2 Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r, echo=TRUE}
+prom[which.max(prom[,2]),1]
+#Maximum number of steps is the interval 835
+```
+
+
+```{r, echo=TRUE}
+prom[which.max(prom[,2]),1]
+#Maximum number of steps is the interval 835
+```
+
+### 3.1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+```{r, echo=TRUE}
+datos<-read.csv("activity.csv")
+colSums(is.na(datos)) 
+# 2304 NA values contained in the steps variable, The VIM package helps us to see the proportion of NAs in the steps variable.
+```
+
+```{r, echo=TRUE}
+library(VIM)
+library(mice)
+aggr(datos,numbers=T,sortVar=T)
+# 13.11% of data in the steps variable are NAs
+```
+
+
+### 3.2 Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+```{r, echo=TRUE}
+# Imputation with the mean (37.3826) across all days, we use the package MICE
+datos<-data.frame(datos)
+columns <- c("steps","date","interval")
+imputed_data <- mice(datos[,names(datos) %in% columns],m = 1, maxit = 1, method = "mean",seed = 2018,print=F)
+```
+
+```{r, echo=TRUE}
+# NOTE: we can also impute the data with the mean with the following function:
+meanStepsInterval <- aggregate(steps ~ interval, data, mean)
+head(meanStepsInterval)
+imputedData <- initdata
+for(x in 1:17568) {
+    if(is.na(imputedData[x, 1])==TRUE) {
+        imputedData[x, 1] <- meanStepsInterval[meanStepsInterval$interval %in% imputedData[x, 3], 2]
+    }
+}
+head(imputedData)
+```
+
+
+### 3.3 Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r, echo=TRUE}
+complete.data <- mice::complete(imputed_data)
+complete<-aggregate(steps~date,complete.data,sum)
+```
+### 3.4 Make a histogram of the total number of steps taken each day and Calculate and report the mean and median
+
+#### 3.4.1. Calculate the mean and median total number of steps per day after imputation
+```{r, echo=TRUE}
+statistics1 <- summarise(complete, mean=mean(complete $steps),
+                               median=median(complete$steps))
+statistics1
+```
+#### 3.4.2. Do these values differ from the estimates from the first part of the assignment? 
+
+##### Answer: the means are equal the medians differ by 1.19
+
+#### 3.4.3. What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r, echo=TRUE}
+library(RColorBrewer)
+darkcols <- brewer.pal(8, "Dark2")
+par(mfrow = c(1, 2))
+hist(totalstep $steps, breaks=20, , xlab=" Steps per day", ylab=" Number of Days ",
+          col = darkcols, ylim=c(0, 20), main=NULL)
+hist(complete$steps, breaks=20, , xlab=" Steps per day", ylab=" Number of Days ",
+               col = darkcols, ylim=c(0, 20), main=NULL)
+mtext("Histograms of the total number of steps taken each day Without & With imputed values", adj=1)
+```
+
+
+##### Answer:  Regarding the mean and median there is no considerable impact, but we can observe in the histograms that the frequency increases in the imputed data.
+
+
+### 4.1. Create a new factor variable in the dataset with two levels -- "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.
+```{r, echo=TRUE}
+"English_United States.1252"
+daysData <- imputedData
+daysData$days <- weekdays(daysData$date)
+daysData$weekday <- as.character(rep(0, times=17568))
+for(x in 1:17568) {
+    if(daysData[x, 4] %in% c("Saturday", "Sunday")) {
+        daysData[x, 5] <- "weekend"
+    } else {
+        daysData[x, 5] <- "weekday"
+    }
+}
+daysData$weekday <- factor(daysData$weekday)
+weekdayData <- daysData[daysData$weekday=="weekday", ]
+weekendData <- daysData[daysData$weekday=="weekend", ]
+weekdayMean <- aggregate(steps ~ interval, weekdayData, mean)
+weekendMean <- aggregate(steps ~ interval, weekendData, mean)
+```
+
+### 4.2. Make a panel plot containing a time series plot
+
+```{r, echo=TRUE}
+par(mfrow=c(2, 1), mar=c(4, 4.1, 3, 2.1))
+plot(weekdayMean$interval, weekdayMean$steps, type="l",
+     main="Average Steps Taken per Interval for Weekdays",
+     xlab="Intervals", ylab="Number of Steps",
+     col="darkred", lwd=1.5, ylim=c(0, 230))
+plot(weekendMean$interval, weekendMean$steps, type="l",
+     main=" Average Steps Taken per Interval for Weekends",
+     xlab="Intervals", ylab="Number of Steps",
+     col="blue", lwd=1.5, ylim=c(0, 230))
+```
+
+
+
